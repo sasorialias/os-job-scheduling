@@ -14,7 +14,7 @@ int jobid=0;
 int siginfo=1;
 int fifo;
 int globalfd;
-
+int wait_goon;
 struct waitqueue *head=NULL;
 struct waitqueue *next=NULL,*current =NULL;
 
@@ -97,13 +97,16 @@ struct waitqueue* jobselect()
 				selectprev = prev;
 				highest = p->job->curpri;
 			}
-			selectprev->next = select->next;
-			if (select == selectprev)
-				head = NULL;
+		selectprev->next = select->next;
+		if (select == selectprev)
+			head = NULL;
 	}
 	return select;
 }
 
+void set_wait(){
+	wait_goon = 0;
+}
 void jobswitch()
 {
 	struct waitqueue *p;
@@ -165,26 +168,28 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 {
 	int status;
 	int ret;
-
 	switch (sig) {
-case SIGVTALRM: /* 到达计时器所设置的计时间隔 */
-	scheduler();
-	return;
-case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
-	ret = waitpid(-1,&status,WNOHANG);
-	if (ret == 0)
+		case SIGALRM: /* 到达计时器所设置的计时间隔 */
+			scheduler();
 		return;
-	if(WIFEXITED(status)){
-		current->job->state = DONE;
-		printf("normal termation, exit status = %d\n",WEXITSTATUS(status));
-	}else if (WIFSIGNALED(status)){
-		printf("abnormal termation, signal number = %d\n",WTERMSIG(status));
-	}else if (WIFSTOPPED(status)){
-		printf("child stopped, signal number = %d\n",WSTOPSIG(status));
-	}
-	return;
-	default:
-		return;
+		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
+			wait_goon = 0; // 继续运行
+			ret = waitpid(-1,&status,WNOHANG);
+			if (ret == 0)
+				return;
+
+
+			if(WIFEXITED(status)){
+				current->job->state = DONE;
+				printf("normal termation, exit status = %d\n",WEXITSTATUS(status));
+			}else if (WIFSIGNALED(status)){
+				printf("abnormal termation, signal number = %d\n",WTERMSIG(status));
+			}else if (WIFSTOPPED(status)){
+				printf("child stopped, signal number = %d\n",WSTOPSIG(status));
+			}
+			return;
+		default:
+			return;
 	}
 }
 
@@ -225,13 +230,13 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 
 	arglist[i] = NULL;
 
-#ifdef DEBUG
+	#ifdef DEBUG
 
 	printf("enqcmd argnum %d\n",enqcmd.argnum);
 	for(i = 0;i < enqcmd.argnum; i++)
 		printf("parse enqcmd:%s\n",arglist[i]);
 
-#endif
+	#endif
 
 	/*向等待队列中增加新的作业*/
 	newnode = (struct waitqueue*)malloc(sizeof(struct waitqueue));
@@ -244,29 +249,33 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		p->next =newnode;
 	}else
 		head=newnode;
-
+	wait_goon = 1;
 	/*为作业创建进程*/
 	if((pid=fork())<0)
 		error_sys("enq fork failed");
 
-	if(pid==0){
+	if(pid==0){ // 子进程
 		newjob->pid =getpid();
 		/*阻塞子进程,等等执行*/
+		kill(getppid(),SIGUSR1);
 		raise(SIGSTOP);
-#ifdef DEBUG
+		#ifdef DEBUG
 
 		printf("begin running\n");
 		for(i=0;arglist[i]!=NULL;i++)
 			printf("arglist %s\n",arglist[i]);
-#endif
+		#endif
 
 		/*复制文件描述符到标准输出*/
 		dup2(globalfd,1);
 		/* 执行命令 */
-		if(execv(arglist[0],arglist)<0)
+		if(execv(arglist[0],arglist)<0){
 			printf("exec failed\n");
+		}
+
 		exit(1);
-	}else{
+	}else{ // 父进程
+		while(wait_goon) sleep(1);
 		newjob->pid=pid;
 	}
 }
@@ -277,9 +286,9 @@ void do_deq(struct jobcmd deqcmd)
 	struct waitqueue *p,*prev,*select,*selectprev;
 	deqid=atoi(deqcmd.data);
 
-#ifdef DEBUG
+	#ifdef DEBUG
 	printf("deq jid %d\n",deqid);
-#endif
+	#endif
 
 	/*current jodid==deqid,终止当前作业*/
 	if (current && current->job->jid ==deqid){
@@ -370,7 +379,7 @@ int main()
 	struct itimerval new,old;
 	struct stat statbuf;
 	struct sigaction newact,oldact1,oldact2;
-
+	sigset_t mask;
 	if(stat("/tmp/server",&statbuf)==0){
 		/* 如果FIFO文件存在,删掉 */
 		if(remove("/tmp/server")<0)
@@ -388,19 +397,26 @@ int main()
 	sigemptyset(&newact.sa_mask);
 	newact.sa_flags=SA_SIGINFO;
 	sigaction(SIGCHLD,&newact,&oldact1);
-	sigaction(SIGVTALRM,&newact,&oldact2);
-
+	sigaction(SIGALRM,&newact,&oldact2);
+	signal(SIGUSR1, set_wait);
 	/* 设置时间间隔为1000毫秒 */
 	interval.tv_sec=1;
 	interval.tv_usec=0;
 
 	new.it_interval=interval;
 	new.it_value=interval;
-	setitimer(ITIMER_VIRTUAL,&new,&old);
+	setitimer(ITIMER_REAL,&new,&old);
 
-	while(siginfo==1);
 
+	sigprocmask(0, NULL, &mask);
+	sigdelset(&mask, SIGVTALRM);
+	sigsuspend(&mask);
+	while(1){
+		if (sigsuspend(&mask) == -1){
+		}
+	}
 	close(fifo);
 	close(globalfd);
 	return 0;
 }
+
