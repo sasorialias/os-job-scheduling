@@ -101,7 +101,14 @@ struct waitqueue* jobselect()
 			}
 		selectprev->next = select->next;
 		if (select == selectprev)
-			head = NULL;
+			{
+				if(select->next==NULL)
+					head = NULL;
+				else{
+					head = select->next;
+					select->next = NULL;
+				}
+			}
 	}
 	return select;
 }
@@ -175,13 +182,10 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			scheduler();
 		return;
 		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
-<<<<<<< HEAD
-=======
 			//wait_goon = 0; // 继续运行
 			if (info->si_status == SIGSTOP){
 				wait_goon = 0; return;
 			}
->>>>>>> origin/master
 			ret = waitpid(-1,&status,WNOHANG);
 
 			if (info->si_status == SIGSTOP){
