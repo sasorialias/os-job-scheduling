@@ -328,8 +328,15 @@ void do_deq(struct jobcmd deqcmd)
 					break;
 				}
 				selectprev->next=select->next;
-				if(select==selectprev)
-					head=NULL;
+				if (select == selectprev)
+				{
+					if(select->next==NULL)
+						head = NULL;
+					else{
+						head = select->next;
+						select->next = NULL;
+					}
+				}
 		}
 		if(select){
 			for(i=0;(select->job->cmdarg)[i]!=NULL;i++){
