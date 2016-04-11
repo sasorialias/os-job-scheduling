@@ -18,7 +18,8 @@ int wait_goon;
 char print_buffer[1000];
 struct waitqueue *head=NULL;
 struct waitqueue *next=NULL,*current =NULL;
-
+struct waitqueue *head1 = NULL;
+struct waitqueue *head2 = NULL;
 /* 调度程序 */
 void scheduler()
 {
@@ -174,6 +175,13 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			scheduler();
 		return;
 		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
+<<<<<<< HEAD
+=======
+			//wait_goon = 0; // 继续运行
+			if (info->si_status == SIGSTOP){
+				wait_goon = 0; return;
+			}
+>>>>>>> origin/master
 			ret = waitpid(-1,&status,WNOHANG);
 
 			if (info->si_status == SIGSTOP){
@@ -293,6 +301,7 @@ void do_deq(struct jobcmd deqcmd)
 {
 	int deqid,i;
 	struct waitqueue *p,*prev,*select,*selectprev;
+	struct waitqueue *temp1;
 	deqid=atoi(deqcmd.data);
 
 	#ifdef DEBUG
@@ -301,6 +310,7 @@ void do_deq(struct jobcmd deqcmd)
 
 	/*current jodid==deqid,终止当前作业*/
 	if (current && current->job->jid ==deqid){
+		temp1 = current->next;
 		printf("teminate current job\n");
 		kill(current->job->pid,SIGKILL);
 		for(i=0;(current->job->cmdarg)[i]!=NULL;i++){
@@ -310,7 +320,7 @@ void do_deq(struct jobcmd deqcmd)
 		free(current->job->cmdarg);
 		free(current->job);
 		free(current);
-		current=NULL;
+		current=temp1;
 	}
 	else{ /* 或者在等待队列中查找deqid */
 		select=NULL;
