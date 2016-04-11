@@ -1,20 +1,13 @@
-#include "time.h"
 #include <stdio.h>
 
-void main()
-{
-  time_t timer,timerc;
-  int count=1;  
-  struct tm *timeinfo;
-  time(&timer);//系统开始的时间
-  while(1)
-  {
-     time(&timerc);
-     if((timerc-timer)>=1)//每过1秒打印
-     {
-       printf("程序经过%d秒\n",count++);
-       timer=timerc;
-     }
-  }
-  
+int main(){
+	int i = 0;
+	printf("Demo is running\n");
+	while(1){
+		i=i+1;
+		sleep(1);
+		printf("Demo has running %d seconds.\n", i);
+		fflush(stdout);
+	}
+	printf("Demo is ending.\n");
 }
