@@ -12,9 +12,10 @@
 
 int jobid=0;
 int siginfo=1;
-int fifo;
+int fifo, fifo2;
 int globalfd;
 int wait_goon;
+char print_buffer[1000];
 struct waitqueue *head=NULL;
 struct waitqueue *next=NULL,*current =NULL;
 struct waitqueue *head1 = NULL;
@@ -100,7 +101,6 @@ struct waitqueue* jobselect()
 			}
 		selectprev->next = select->next;
 		if (select == selectprev)
-<<<<<<< HEAD
 			{
 				if(select->next==NULL)
 					head = NULL;
@@ -109,17 +109,6 @@ struct waitqueue* jobselect()
 					select->next = NULL;
 				}
 			}
-=======
-		{
-			if(select->next==NULL)
-				head = NULL;
-			else{
-				head = select->next;
-				select->next = NULL;
-			}
-		}		
-			
->>>>>>> origin/master
 	}
 	return select;
 }
@@ -198,9 +187,14 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 				wait_goon = 0; return;
 			}
 			ret = waitpid(-1,&status,WNOHANG);
+
+			if (info->si_status == SIGSTOP){
+				wait_goon = 0;
+				return;
+			}
+
 			if (ret == 0)
 				return;
-
 
 			if(WIFEXITED(status)){
 				current->job->state = DONE;
@@ -274,8 +268,11 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		head=newnode;
 	wait_goon = 1;
 	/*为作业创建进程*/
-	if((pid=fork())<0)
+	if((pid=fork())<0){
 		error_sys("enq fork failed");
+		wait_goon = 0;
+	}
+
 
 	if(pid==0){ // 子进程
 		newjob->pid =getpid();
@@ -299,6 +296,7 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		exit(1);
 	}else{ // 父进程
 		while(wait_goon) sleep(1);
+		//kill(pid, SIGTSTP);
 		newjob->pid=pid;
 	}
 }
@@ -339,15 +337,8 @@ void do_deq(struct jobcmd deqcmd)
 					break;
 				}
 				selectprev->next=select->next;
-				if (select == selectprev)
-				{
-					if(select->next==NULL)
-						head = NULL;
-					else{
-						head = select->next;
-						select->next = NULL;
-					}
-				}
+				if(select==selectprev)
+					head=NULL;
 		}
 		if(select){
 			for(i=0;(select->job->cmdarg)[i]!=NULL;i++){
@@ -366,6 +357,9 @@ void do_stat(struct jobcmd statcmd)
 {
 	struct waitqueue *p;
 	char timebuf[BUFLEN];
+	int shift = 0;
+	int i;
+
 	/*
 	*打印所有作业的统计信息:
 	*1.作业ID
@@ -378,11 +372,12 @@ void do_stat(struct jobcmd statcmd)
 	*/
 
 	/* 打印信息头部 */
-	printf("JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
+	shift += sprintf(print_buffer,"JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
 	if(current){
 		strcpy(timebuf,ctime(&(current->job->create_time)));
 		timebuf[strlen(timebuf)-1]='\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+		shift+= sprintf(print_buffer+shift,
+			"%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
 			current->job->jid,
 			current->job->pid,
 			current->job->ownerid,
@@ -394,7 +389,8 @@ void do_stat(struct jobcmd statcmd)
 	for(p=head;p!=NULL;p=p->next){
 		strcpy(timebuf,ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1]='\0';
-		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+		shift += sprintf(print_buffer+shift,
+			"%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
 			p->job->jid,
 			p->job->pid,
 			p->job->ownerid,
@@ -403,6 +399,15 @@ void do_stat(struct jobcmd statcmd)
 			timebuf,
 			"READY");
 	}
+
+	shift ++;
+	print_buffer[shift] = -1;
+
+	if((fifo2=open("/tmp/server2",O_WRONLY))<0)
+		error_sys("open fifo2 failed");
+	if (write(fifo2, print_buffer, shift) < 0)
+		error_sys("stat write failed");
+	close(fifo2);
 }
 
 int main()
@@ -420,6 +425,7 @@ int main()
 
 	if(mkfifo("/tmp/server",0666)<0)
 		error_sys("mkfifo failed");
+
 	/* 在非阻塞模式下打开FIFO */
 	if((fifo=open("/tmp/server",O_RDONLY|O_NONBLOCK))<0)
 		error_sys("open fifo failed");
@@ -438,7 +444,9 @@ int main()
 	new.it_interval=interval;
 	new.it_value=interval;
 	setitimer(ITIMER_REAL,&new,&old);
-
+	#ifdef DEBUG
+	printf("****\n");
+	#endif
 
 	sigprocmask(0, NULL, &mask);
 	sigdelset(&mask, SIGVTALRM);
@@ -448,6 +456,7 @@ int main()
 		}
 	}
 	close(fifo);
+	close(fifo2);
 	close(globalfd);
 	return 0;
 }
