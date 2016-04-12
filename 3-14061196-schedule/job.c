@@ -16,17 +16,21 @@ int fifo, fifo2;
 int globalfd;
 int wait_goon;
 char print_buffer[1000];
-struct waitqueue *head=NULL;
-struct waitqueue *next=NULL,*current =NULL;
-struct waitqueue *head1 = NULL;
-struct waitqueue *head2 = NULL;
-/* 调度程序 */
-void scheduler()
-{
-	struct jobinfo *newjob=NULL;
-	struct jobcmd cmd;
+
+#ifndef MY_SCHEDULER
+extern struct waitqueue *head, *next;
+#endif
+
+struct waitqueue *current=NULL;
+//struct waitqueue *head1 = NULL;
+//struct waitqueue *head2 = NULL;
+
+void orzlibo() {
 	int  count = 0;
-	bzero(&cmd,DATALEN);
+	struct jobcmd cmd;
+	struct jobinfo *newjob=NULL;
+	//bzero(&cmd,DATALEN);
+	memset(&cmd,0,sizeof(cmd));
 	if((count=read(fifo,&cmd,DATALEN))<0)
 		error_sys("read fifo failed");
 #ifdef DEBUG
@@ -37,10 +41,6 @@ void scheduler()
 	else
 		printf("no data read\n");
 #endif
-
-	/* 更新等待队列中的作业 */
-	updateall();
-
 	switch(cmd.type){
 	case ENQ:
 		do_enq(newjob,cmd);
@@ -54,11 +54,6 @@ void scheduler()
 	default:
 		break;
 	}
-
-	/* 选择高优先级作业 */
-	next=jobselect();
-	/* 作业切换 */
-	jobswitch();
 }
 
 int allocjid()
@@ -66,113 +61,8 @@ int allocjid()
 	return ++jobid;
 }
 
-void updateall()
-{
-	struct waitqueue *p;
-
-	/* 更新作业运行时间 */
-	if(current)
-		current->job->run_time += 1; /* 加1代表1000ms */
-
-	/* 更新作业等待时间及优先级 */
-	for(p = head; p != NULL; p = p->next){
-		p->job->wait_time += 1000;
-		if(p->job->wait_time >= 5000 && p->job->curpri < 3){
-			p->job->curpri++;
-			p->job->wait_time = 0;
-		}
-	}
-}
-
-struct waitqueue* jobselect()
-{
-	struct waitqueue *p,*prev,*select,*selectprev;
-	int highest = -1;
-
-	select = NULL;
-	selectprev = NULL;
-	if(head){
-		/* 遍历等待队列中的作业，找到优先级最高的作业 */
-		for(prev = head, p = head; p != NULL; prev = p,p = p->next)
-			if(p->job->curpri > highest){
-				select = p;
-				selectprev = prev;
-				highest = p->job->curpri;
-			}
-		selectprev->next = select->next;
-		if (select == selectprev)
-		{
-			if(select->next==NULL)
-				head = NULL;
-			else{
-				head = select->next;
-				select->next = NULL;
-			}
-		}	
-	}
-	if(select!=NULL)
-		select->next = NULL;
-	return select;
-}
-
 void set_wait(){
 	wait_goon = 0;
-}
-void jobswitch()
-{
-	struct waitqueue *p;
-	int i;
-
-	if(current && current->job->state == DONE){ /* 当前作业完成 */
-		/* 作业完成，删除它 */
-		for(i = 0;(current->job->cmdarg)[i] != NULL; i++){
-			free((current->job->cmdarg)[i]);
-			(current->job->cmdarg)[i] = NULL;
-		}
-		/* 释放空间 */
-		free(current->job->cmdarg);
-		free(current->job);
-		free(current);
-
-		current = NULL;
-	}
-
-	if(next == NULL && current == NULL) /* 没有作业要运行 */
-
-		return;
-	else if (next != NULL && current == NULL){ /* 开始新的作业 */
-
-		printf("begin start new job\n");
-		current = next;
-		next = NULL;
-		current->job->state = RUNNING;
-		kill(current->job->pid,SIGCONT);
-		return;
-	}
-	else if (next != NULL && current != NULL){ /* 切换作业 */
-
-		printf("switch to Pid: %d\n",next->job->pid);
-		kill(current->job->pid,SIGSTOP);
-		current->job->curpri = current->job->defpri;
-		current->job->wait_time = 0;
-		current->job->state = READY;
-
-		/* 放回等待队列 */
-		if(head){
-			for(p = head; p->next != NULL; p = p->next);
-			p->next = current;
-		}else{
-			head = current;
-		}
-		current = next;
-		next = NULL;
-		current->job->state = RUNNING;
-		current->job->wait_time = 0;
-		kill(current->job->pid,SIGCONT);
-		return;
-	}else{ /* next == NULL且current != NULL，不切换 */
-		return;
-	}
 }
 
 void sig_handler(int sig,siginfo_t *info,void *notused)
@@ -259,6 +149,7 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 	#endif
 
 	/*向等待队列中增加新的作业*/
+#ifndef MY_SCHEDULER
 	newnode = (struct waitqueue*)malloc(sizeof(struct waitqueue));
 	newnode->next =NULL;
 	newnode->job=newjob;
@@ -275,6 +166,9 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		error_sys("enq fork failed");
 		wait_goon = 0;
 	}
+#else
+	do_enq_native(newjob);
+#endif
 
 
 	if(pid==0){ // 子进程
@@ -314,6 +208,8 @@ void do_deq(struct jobcmd deqcmd)
 	#ifdef DEBUG
 	printf("deq jid %d\n",deqid);
 	#endif
+
+#ifndef MY_SCHEDULER
 
 	/*current jodid==deqid,终止当前作业*/
 	if (current && current->job->jid ==deqid){
@@ -362,6 +258,9 @@ void do_deq(struct jobcmd deqcmd)
 			select=NULL;
 		}
 	}
+#else
+	do_deq_native(deqid);
+#endif
 }
 
 void do_stat(struct jobcmd statcmd)
@@ -383,6 +282,7 @@ void do_stat(struct jobcmd statcmd)
 	*/
 
 	/* 打印信息头部 */
+#ifndef MY_SCHEDULER
 	shift += sprintf(print_buffer,"JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
 	if(current){
 		strcpy(timebuf,ctime(&(current->job->create_time)));
@@ -419,6 +319,9 @@ void do_stat(struct jobcmd statcmd)
 	if (write(fifo2, print_buffer, shift) < 0)
 		error_sys("stat write failed");
 	close(fifo2);
+#else
+	puts("Not implemented.");
+#endif
 }
 
 int main()
@@ -428,6 +331,12 @@ int main()
 	struct stat statbuf;
 	struct sigaction newact,oldact1,oldact2;
 	sigset_t mask;
+
+#ifdef MY_SCHEDULER
+	puts("Modified scheduler working.");
+#else
+	puts("Original scheduler working.");
+#endif
 	if(stat("/tmp/server",&statbuf)==0){
 		/* 如果FIFO文件存在,删掉 */
 		if(remove("/tmp/server")<0)

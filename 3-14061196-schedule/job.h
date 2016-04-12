@@ -17,6 +17,9 @@
 #define BUFLEN 100
 #define GLOBALFILE "screendump"
 
+//#define MYSCHEDULER
+#define MAX_PRIORITY 4
+
 enum jobstate{
     READY,RUNNING,DONE
 };
@@ -52,6 +55,8 @@ struct waitqueue{
     struct jobinfo *job;
 };
 
+//#define MY_SCHEDULER
+
 void scheduler();
 void sig_handler(int sig,siginfo_t *info,void *notused);
 int allocjid();
@@ -60,9 +65,15 @@ void del_queue(struct jobinfo *job);
 void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd);
 void do_deq(struct jobcmd deqcmd);
 void do_stat(struct jobcmd statcmd);
-void updateall();
-struct waitqueue* jobselect();
-void jobswitch();
+void orzlibo();
+//void updateall();
+//struct waitqueue* jobselect();
+//void jobswitch();
+
+#ifdef MY_SCHEDULER
+void do_enq_native(struct jobinfo* newjob);
+void do_deq_native(int jid);
+#endif
 
 void error_doit(int errnoflag,const char *fmt,va_list ap);
 void error_sys(const char *fmt,...);

@@ -1,5 +1,7 @@
-job: job.c job.h error.c enq deq stat Demo
-	cc -g -o job job.c job.h error.c
+job: job.c job.h error.c job_sche.c job_sche_new.c enq deq stat Demo
+	cc -DMY_SCHEDULER -g -o job job.c job.h error.c job_sche.c job_sche_new.c
+legacy: job.c job.h error.c job_sche.c job_sche_new.c enq deq stat Demo
+	cc -g -o job job.c job.h error.c job_sche.c job_sche_new.c
 enq: enq.c job.h error.c
 	cc -g -o enq enq.c job.h error.c
 deq: deq.c job.h error.c
