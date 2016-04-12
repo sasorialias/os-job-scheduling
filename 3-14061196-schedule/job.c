@@ -166,9 +166,6 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		error_sys("enq fork failed");
 		wait_goon = 0;
 	}
-#else
-	do_enq_native(newjob);
-#endif
 
 
 	if(pid==0){ // 子进程
@@ -196,6 +193,9 @@ void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd)
 		//kill(pid, SIGTSTP);
 		newjob->pid=pid;
 	}
+#else
+	do_enq_native(newjob,arglist);
+#endif
 }
 
 void do_deq(struct jobcmd deqcmd)

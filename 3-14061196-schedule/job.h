@@ -71,7 +71,7 @@ void orzlibo();
 //void jobswitch();
 
 #ifdef MY_SCHEDULER
-void do_enq_native(struct jobinfo* newjob);
+void do_enq_native(struct jobinfo* newjob,char **arglist);
 void do_deq_native(int jid);
 #endif
 

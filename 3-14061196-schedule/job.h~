@@ -65,7 +65,7 @@ void del_queue(struct jobinfo *job);
 void do_enq(struct jobinfo *newjob,struct jobcmd enqcmd);
 void do_deq(struct jobcmd deqcmd);
 void do_stat(struct jobcmd statcmd);
-void deal_cmd();
+void orzlibo();
 //void updateall();
 //struct waitqueue* jobselect();
 //void jobswitch();

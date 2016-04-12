@@ -2,12 +2,22 @@
 
 #ifdef MY_SCHEDULER
 
+#define DBG
+
 struct waitqueue *running_stack;
 struct waitqueue *head[MAX_PRIORITY];
 extern struct waitqueue *current;
 
+const int SLICE_TIME[]={5,3,2,1};
+
 void update_all();
 void job_switch();
+
+void putss(const char *x) {
+#ifdef DBG
+	puts(x);
+#endif
+}
 
 void push_stack(struct waitqueue* target) {
 	target->next=running_stack;
@@ -32,10 +42,41 @@ void scheduler() {
 	update_all();
 	orzlibo();
 	job_switch();
-	printf("Executed, current task pid: %d\n",current->job->pid);
+	printf("Executed, current task pid: %d\n",current?current->job->pid:-1);
 }
 
-void do_enq_native(struct jobinfo* newjob) {
+int clearance;
+void set_clearance() { clearance=1; }
+void do_enq_native(struct jobinfo* newjob,char** arglist) {
+	if(current) {
+		push_stack(current);
+		kill(current->job->pid,SIGSTOP);
+		current->job->state=READY;
+		current=NULL;
+	}
+	newjob->wait_time=SLICE_TIME[newjob->defpri];
+
+	signal(SIGCONT,set_clearance);
+	clearance=0;
+	if((newjob->pid=fork())<0) {
+		signal(SIGCONT,set_clearance);
+		error_sys("enq fork failed.");
+		return;
+	}
+	else if(newjob->pid) {
+		signal(SIGCONT,set_clearance);
+		struct waitqueue *tmp=
+			(struct waitqueue*)malloc(sizeof(struct waitqueue));
+		tmp->job=newjob;
+		push_stack(tmp);
+	}
+	else {
+		//dup2(globalfd,1);
+		while(!clearance);
+		if(execv(arglist[0],arglist)<0)
+			puts("exec failed");
+		exit(1);
+	}
 }
 
 void do_deq_native(int jid) {
@@ -56,7 +97,7 @@ void update_all() {
 
 	if(current)
 		--current->job->wait_time;
-	if(!current->job->wait_time) { // 时间片用完了,返回等待队列进行续1秒
+	if(current && !current->job->wait_time) { // 时间片用完了,返回等待队列进行续1秒
 		push_queue(current,head + current->job->defpri);
 		kill(current->job->pid,SIGSTOP);
 		current->job->state=READY;
@@ -64,7 +105,6 @@ void update_all() {
 	}
 }
 
-const int SLICE_TIME[]={5,3,2,1};
 void job_select() {
 	int i;
 	for(i=MAX_PRIORITY-1;i>=0&&!running_stack;--i)
