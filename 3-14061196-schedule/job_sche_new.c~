@@ -1,0 +1,15 @@
+#include "job.h"
+
+#ifdef MY_SCHEDULER
+
+void scheduler() {
+	puts("Not implemented");
+}
+
+void do_enq_native(struct jobinfo* newjob) {
+}
+
+void do_deq_native(int jid) {
+}
+
+#endif
