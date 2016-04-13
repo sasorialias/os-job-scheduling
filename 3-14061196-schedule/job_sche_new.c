@@ -57,7 +57,6 @@ void scheduler() {
 	update_all();
 	orzlibo();
 	job_switch();
-	printf("Executed, current task pid: %d\n",current?current->job->pid:-1);
 }
 
 int clearance;
@@ -68,6 +67,7 @@ void do_enq_native(struct jobinfo* newjob,char** arglist) {
 
 	signal(SIGCONT,set_clearance);
 	clearance=0;
+	fflush(stdout);
 	if((newjob->pid=fork())<0) {
 		signal(SIGCONT,SIG_DFL);
 		error_sys("enq fork failed.");
@@ -91,9 +91,10 @@ void do_enq_native(struct jobinfo* newjob,char** arglist) {
 }
 
 void do_deq_native(int jid) {
+	printf("prepare to deq jid=%d\n",jid);
 	int i;
 	struct waitqueue **ptr;
-	if(current->job->jid==jid)
+	if(current && current->job->jid==jid)
 		send_back_to_queue();
 	for(i=0;i<MAX_PRIORITY;++i)
 		for(ptr=head+i;*ptr;ptr=&(*ptr)->next)
@@ -111,15 +112,14 @@ void update_all() {
 	struct waitqueue **ptr;
 
 	for(i=MAX_PRIORITY-1;i>=0;--i)
-		for(ptr=&head[i];*ptr;ptr=&(*ptr)->next)
+		for(ptr=&head[i];*ptr;*ptr&&(ptr=&(*ptr)->next))
 			if(++(*ptr)->job->wait_time>=10 && i<MAX_PRIORITY-1) {
 				struct waitqueue *tmp=*ptr;
 				*ptr=(*ptr)->next;
 				tmp->job->wait_time=0;
 				push_queue(tmp,head+i+1);
 			}
-
-	if(current && !--current->job->wait_time) 
+	if(current && !--current->job->wait_time)
 		send_back_to_queue();
 }
 

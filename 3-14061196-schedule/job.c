@@ -19,6 +19,8 @@ char print_buffer[1000];
 
 #ifndef MY_SCHEDULER
 extern struct waitqueue *head, *next;
+#else
+extern struct waitqueue *head[MAX_PRIORITY];
 #endif
 
 struct waitqueue *current=NULL;
@@ -69,10 +71,9 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 {
 	int status;
 	int ret;
-	int lock=0;
 	switch (sig) {
 		case SIGALRM: /* 到达计时器所设置的计时间隔 */
-			if(!lock) scheduler();
+			scheduler();
 		return;
 		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
 
@@ -285,7 +286,6 @@ void do_stat(struct jobcmd statcmd)
 	*/
 
 	/* 打印信息头部 */
-#ifndef MY_SCHEDULER
 	shift += sprintf(print_buffer,"JOBID\tPID\tOWNER\tRUNTIME\tWAITTIME\tCREATTIME\t\tSTATE\n");
 	if(current){
 		strcpy(timebuf,ctime(&(current->job->create_time)));
@@ -299,8 +299,11 @@ void do_stat(struct jobcmd statcmd)
 			current->job->wait_time,
 			timebuf,"RUNNING");
 	}
-
+#ifdef MY_SCHEDULER
+	for(i=0;i<MAX_PRIORITY;++i) for(p=head[i];p;p=p->next) {
+#else
 	for(p=head;p!=NULL;p=p->next){
+#endif
 		strcpy(timebuf,ctime(&(p->job->create_time)));
 		timebuf[strlen(timebuf)-1]='\0';
 		shift += sprintf(print_buffer+shift,
@@ -322,9 +325,6 @@ void do_stat(struct jobcmd statcmd)
 	if (write(fifo2, print_buffer, shift) < 0)
 		error_sys("stat write failed");
 	close(fifo2);
-#else
-	puts("Not implemented.");
-#endif
 }
 
 int main()
