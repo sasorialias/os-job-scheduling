@@ -19,23 +19,38 @@ void putss(const char *x) {
 #endif
 }
 
-void push_stack(struct waitqueue* target) {
+void free_item(struct waitqueue *target) {
+	puts("not implemented (memory leak)");
+	free(target->job);
+	free(target);
+}
+
+inline void push_stack(struct waitqueue* target) {
 	target->next=running_stack;
 	running_stack=target;
 }
-
 struct waitqueue *pop_stack(struct waitqueue **target) {
 	struct waitqueue *ans=*target;
 	if(*target)
 		*target=(*target)->next;
 	return ans;
 }
-
 void push_queue(struct waitqueue *x,struct waitqueue **target) {
 	while(*target)
 		target=&((*target)->next);
 	x->next=NULL;
 	*target=x;
+}
+void send_back_to_queue() {
+	if(!current) return;
+	kill(current->job->pid,SIGSTOP);
+	current->job->wait_time=0;
+	current->job->state=READY;
+	if(waitpid(current->job->pid,NULL,WNOHANG))
+		free_item(current);
+	else
+		push_queue(current,&head[current->job->defpri]);
+	current=NULL;
 }
 
 void scheduler() {
@@ -48,27 +63,23 @@ void scheduler() {
 int clearance;
 void set_clearance() { clearance=1; }
 void do_enq_native(struct jobinfo* newjob,char** arglist) {
-	if(current) {
-		push_stack(current);
-		kill(current->job->pid,SIGSTOP);
-		current->job->state=READY;
-		current=NULL;
-	}
-	newjob->wait_time=SLICE_TIME[newjob->defpri];
+	if(current && newjob->defpri > current->job->defpri) 
+		send_back_to_queue();
 
 	signal(SIGCONT,set_clearance);
 	clearance=0;
 	if((newjob->pid=fork())<0) {
-		signal(SIGCONT,set_clearance);
+		signal(SIGCONT,SIG_DFL);
 		error_sys("enq fork failed.");
 		return;
 	}
 	else if(newjob->pid) {
-		signal(SIGCONT,set_clearance);
+		signal(SIGCONT,SIG_DFL);
+		kill(newjob->pid,SIGSTOP);
 		struct waitqueue *tmp=
 			(struct waitqueue*)malloc(sizeof(struct waitqueue));
 		tmp->job=newjob;
-		push_stack(tmp);
+		push_queue(tmp,&head[newjob->defpri]);
 	}
 	else {
 		//dup2(globalfd,1);
@@ -80,6 +91,19 @@ void do_enq_native(struct jobinfo* newjob,char** arglist) {
 }
 
 void do_deq_native(int jid) {
+	int i;
+	struct waitqueue **ptr;
+	if(current->job->jid==jid)
+		send_back_to_queue();
+	for(i=0;i<MAX_PRIORITY;++i)
+		for(ptr=head+i;*ptr;ptr=&(*ptr)->next)
+			if((*ptr)->job->jid==jid) {
+				struct waitqueue *tmp=*ptr;
+				*ptr=(*ptr)->next;
+				free_item(tmp);
+				return;
+			}
+	puts("job not found");
 }
 
 void update_all() {
@@ -95,14 +119,8 @@ void update_all() {
 				push_queue(tmp,head+i+1);
 			}
 
-	if(current)
-		--current->job->wait_time;
-	if(current && !current->job->wait_time) { // 时间片用完了,返回等待队列进行续1秒
-		push_queue(current,head + current->job->defpri);
-		kill(current->job->pid,SIGSTOP);
-		current->job->state=READY;
-		current=NULL;
-	}
+	if(current && !--current->job->wait_time) 
+		send_back_to_queue();
 }
 
 void job_select() {
@@ -116,7 +134,11 @@ void job_select() {
 }
 
 void job_switch() {
-	if(current) return;
+	if(current) {
+		if(waitpid(current->job->pid,NULL,WNOHANG))
+			send_back_to_queue();
+		else return;
+	}
 	if(!running_stack) job_select();
 	if(running_stack) {
 		current=pop_stack(&running_stack);

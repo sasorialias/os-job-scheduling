@@ -69,13 +69,15 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 {
 	int status;
 	int ret;
+	int lock=0;
 	switch (sig) {
 		case SIGALRM: /* 到达计时器所设置的计时间隔 */
-			scheduler();
+			if(!lock) scheduler();
 		return;
 		case SIGCHLD: /* 子进程结束时传送给父进程的信号 */
 
 			//wait_goon = 0; // 继续运行
+#ifndef MY_SCHEDULER
 			if (info->si_status == SIGSTOP){
 				wait_goon = 0; return;
 			}
@@ -88,9 +90,10 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 
 			if (ret == 0)
 				return;
+#endif
 
 			if(WIFEXITED(status)){
-				current->job->state = DONE;
+				//current->job->state = DONE; **** CRASH ****
 				printf("normal termation, exit status = %d\n",WEXITSTATUS(status));
 			}else if (WIFSIGNALED(status)){
 				printf("abnormal termation, signal number = %d\n",WTERMSIG(status));
