@@ -91,7 +91,7 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 
 			if (ret == 0)
 				return;
-#endif
+
 
 			if(WIFEXITED(status)){
 				//current->job->state = DONE; **** CRASH ****
@@ -101,6 +101,7 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			}else if (WIFSTOPPED(status)){
 				printf("child stopped, signal number = %d\n",WSTOPSIG(status));
 			}
+#endif
 			return;
 		default:
 			return;

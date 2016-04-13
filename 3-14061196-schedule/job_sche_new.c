@@ -46,10 +46,14 @@ void send_back_to_queue() {
 	kill(current->job->pid,SIGSTOP);
 	current->job->wait_time=0;
 	current->job->state=READY;
-	if(waitpid(current->job->pid,NULL,WNOHANG))
+	if(waitpid(current->job->pid,NULL,WNOHANG)) {
+		printf("job (jid=%d) terminated.\n",current->job->jid);
 		free_item(current);
-	else
+	}
+	else {
+		printf("job (jid=%d) stopped.\n",current->job->jid);
 		push_queue(current,&head[current->job->defpri]);
+	}
 	current=NULL;
 }
 
@@ -142,6 +146,7 @@ void job_switch() {
 	if(!running_stack) job_select();
 	if(running_stack) {
 		current=pop_stack(&running_stack);
+		printf("job (jid=%d) continued.\n",current->job->jid);
 		kill(current->job->pid,SIGCONT);
 		current->job->state=RUNNING;
 	}
