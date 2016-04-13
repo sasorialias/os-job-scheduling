@@ -133,7 +133,7 @@ void job_select() {
 		if(head[i]) {
 			push_stack(pop_stack(head+i));
 			running_stack->job->wait_time=
-				SLICE_TIME[running_stack->job->defpri];
+				SLICE_TIME[i];
 		}
 }
 
