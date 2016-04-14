@@ -79,6 +79,6 @@ void error_doit(int errnoflag,const char *fmt,va_list ap);
 void error_sys(const char *fmt,...);
 void error_msg(const char *fmt,...);
 void error_quit(const char *fmt,...);
-
+void debug_print();
 #endif
 

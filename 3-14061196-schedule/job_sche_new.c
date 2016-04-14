@@ -1,5 +1,5 @@
 #include "job.h"
-
+#include<time.h>
 #ifdef MY_SCHEDULER
 
 #define DBG
@@ -9,10 +9,41 @@ struct waitqueue *head[MAX_PRIORITY];
 extern struct waitqueue *current;
 
 const int SLICE_TIME[]={5,3,2,1};
-
+void debug_print()
+{
+	struct waitqueue *p;
+	char timebuf[BUFLEN];
+	int i;
+	if(current){
+		strcpy(timebuf,ctime(&(current->job->create_time)));
+		timebuf[strlen(timebuf)-1]='\0';
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+			current->job->jid,
+			current->job->pid,
+			current->job->ownerid,
+			current->job->run_time,
+			current->job->wait_time,
+			timebuf,"RUNNING");
+	}
+#ifdef MY_SCHEDULER
+	for(i=0;i<MAX_PRIORITY;++i) for(p=head[i];p;p=p->next) {
+#else
+	for(p=head;p!=NULL;p=p->next){
+#endif
+		strcpy(timebuf,ctime(&(p->job->create_time)));
+		timebuf[strlen(timebuf)-1]='\0';
+		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+			p->job->jid,
+			p->job->pid,
+			p->job->ownerid,
+			p->job->run_time,
+			p->job->wait_time,
+			timebuf,
+			"READY");
+	}	
+}
 void update_all();
 void job_switch();
-
 void putss(const char *x) {
 #ifdef DBG
 	puts(x);
@@ -25,7 +56,7 @@ void free_item(struct waitqueue *target) {
 	free(target);
 }
 
-inline void push_stack(struct waitqueue* target) {
+void push_stack(struct waitqueue* target) {
 	target->next=running_stack;
 	running_stack=target;
 }
@@ -51,6 +82,10 @@ void send_back_to_queue() {
 		free_item(current);
 	}
 	else {
+		#ifdef MY_SCHEDULER
+				puts("The job has finished its time slice but not complete!");
+				debug_print();
+				#endif
 		printf("job (jid=%d) stopped.\n",current->job->jid);
 		push_queue(current,&head[current->job->defpri]);
 	}
@@ -58,9 +93,25 @@ void send_back_to_queue() {
 }
 
 void scheduler() {
+	//#ifdef MY_SCHEDULER
+	//puts("Before update!");
+	//debug_print();
+	//#endif
 	update_all();
+	//#ifdef MY_SCHEDULER
+	//puts("End update!");
+	//debug_print();
+	//#endif
 	orzlibo();
+	// #ifdef MY_SCHEDULER
+	// puts("Before job_switch!");
+	// debug_print();
+	//#endif
 	job_switch();
+	// #ifdef MY_SCHEDULER
+	// puts("End job_switch!");
+	// debug_print();
+	// #endif
 }
 
 int clearance;
@@ -132,8 +183,7 @@ void job_select() {
 	for(i=MAX_PRIORITY-1;i>=0&&!running_stack;--i)
 		if(head[i]) {
 			push_stack(pop_stack(head+i));
-			running_stack->job->wait_time=
-				SLICE_TIME[i];
+			running_stack->job->wait_time=SLICE_TIME[i];
 		}
 }
 

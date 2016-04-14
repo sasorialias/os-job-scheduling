@@ -9,14 +9,13 @@
 #include <fcntl.h>
 #include <time.h>
 #include "job.h"
-
+#define DEBUG_lborz
 int jobid=0;
 int siginfo=1;
 int fifo, fifo2;
 int globalfd;
 int wait_goon;
 char print_buffer[1000];
-
 #ifndef MY_SCHEDULER
 extern struct waitqueue *head, *next;
 #else
@@ -45,13 +44,37 @@ void orzlibo() {
 #endif
 	switch(cmd.type){
 	case ENQ:
+		// #ifdef MY_SCHEDULER
+		// puts("Before enq!");
+		// debug_print();
+		//#endif
 		do_enq(newjob,cmd);
+		// #ifdef MY_SCHEDULER
+		// puts("End enq!");
+		// debug_print();
+		// #endif
 		break;
 	case DEQ:
+		// #ifdef MY_SCHEDULER
+		// puts("Before deq!");
+		// debug_print();
+		// #endif
 		do_deq(cmd);
+		// #ifdef MY_SCHEDULER
+		// puts("End deq!");
+		// debug_print();
+		// #endif
 		break;
 	case STAT:
+		// #ifdef MY_SCHEDULER
+		// puts("Before stat!");
+		// debug_print();
+		// #endif
 		do_stat(cmd);
+		// #ifdef MY_SCHEDULER
+		// puts("End stat!");
+		// debug_print();
+		// #endif
 		break;
 	default:
 		break;
@@ -80,11 +103,19 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			//wait_goon = 0; // 继续运行
 #ifndef MY_SCHEDULER
 			if (info->si_status == SIGSTOP){
+				//#ifdef DEBUG_lborz
+				puts("The job has finished its time slice but not complete!");
+				debug_print();
+				// #endif
 				wait_goon = 0; return;
 			}
 			ret = waitpid(-1,&status,WNOHANG);
 
 			if (info->si_status == SIGSTOP){
+				#ifdef DEBUG_lborz
+				puts("The job has finished its time slice but not complete!");
+				debug_print();
+				#endif
 				wait_goon = 0;
 				return;
 			}
@@ -267,7 +298,39 @@ void do_deq(struct jobcmd deqcmd)
 	do_deq_native(deqid);
 #endif
 }
-
+// void debug_print()
+// {
+// 	struct waitqueue *p;
+// 	char timebuf[BUFLEN];
+// 	int i;
+// 	if(current){
+// 		strcpy(timebuf,ctime(&(current->job->create_time)));
+// 		timebuf[strlen(timebuf)-1]='\0';
+// 		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+// 			current->job->jid,
+// 			current->job->pid,
+// 			current->job->ownerid,
+// 			current->job->run_time,
+// 			current->job->wait_time,
+// 			timebuf,"RUNNING");
+// 	}
+// #ifdef MY_SCHEDULER
+// 	for(i=0;i<MAX_PRIORITY;++i) for(p=head[i];p;p=p->next) {
+// #else
+// 	for(p=head;p!=NULL;p=p->next){
+// #endif
+// 		strcpy(timebuf,ctime(&(p->job->create_time)));
+// 		timebuf[strlen(timebuf)-1]='\0';
+// 		printf("%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+// 			p->job->jid,
+// 			p->job->pid,
+// 			p->job->ownerid,
+// 			p->job->run_time,
+// 			p->job->wait_time,
+// 			timebuf,
+// 			"READY");
+// 	}	
+// }
 void do_stat(struct jobcmd statcmd)
 {
 	struct waitqueue *p;
