@@ -9,7 +9,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include "job.h"
-#define DEBUG_lborz
+#define DEBUG1
 int jobid=0;
 int siginfo=1;
 int fifo, fifo2;
@@ -26,7 +26,7 @@ struct waitqueue *current=NULL;
 //struct waitqueue *head1 = NULL;
 //struct waitqueue *head2 = NULL;
 
-void orzlibo() {
+void handlecmd() {
 	int  count = 0;
 	struct jobcmd cmd;
 	struct jobinfo *newjob=NULL;
@@ -103,7 +103,7 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			//wait_goon = 0; // 继续运行
 #ifndef MY_SCHEDULER
 			if (info->si_status == SIGSTOP){
-				//#ifdef DEBUG_lborz
+				//#ifdef DEBUG1
 				puts("The job has finished its time slice but not complete!");
 				debug_print();
 				// #endif
@@ -112,7 +112,7 @@ void sig_handler(int sig,siginfo_t *info,void *notused)
 			ret = waitpid(-1,&status,WNOHANG);
 
 			if (info->si_status == SIGSTOP){
-				#ifdef DEBUG_lborz
+				#ifdef DEBUG1
 				puts("The job has finished its time slice but not complete!");
 				debug_print();
 				#endif

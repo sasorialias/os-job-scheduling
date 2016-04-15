@@ -102,7 +102,7 @@ void scheduler() {
 	//puts("End update!");
 	//debug_print();
 	//#endif
-	orzlibo();
+	handlecmd();
 	// #ifdef MY_SCHEDULER
 	// puts("Before job_switch!");
 	// debug_print();

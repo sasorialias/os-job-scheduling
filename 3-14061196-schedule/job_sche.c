@@ -1,4 +1,4 @@
-#include "job.h"
+﻿#include "job.h"
 #include <string.h>
 
 #ifndef MY_SCHEDULER
@@ -19,8 +19,7 @@ void scheduler()
 	/* 更新等待队列中的作业 */
 	updateall();
 	
-	/* 膜拜李搏大神 */
-	orzlibo();
+	handlecmd();
 
 	/* 选择高优先级作业 */
 	next=jobselect();
