@@ -51,7 +51,7 @@ void putss(const char *x) {
 }
 
 void free_item(struct waitqueue *target) {
-	puts("not implemented (memory leak)");
+//	puts("not implemented (memory leak)");
 	free(target->job);
 	free(target);
 }
